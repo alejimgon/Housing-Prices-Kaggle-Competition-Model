@@ -19,8 +19,8 @@ This repository contains my current model for the Housing Prices Kaggle competit
 ## Installation
 1. **Clone the repository**:
     ```sh
-    git clone https://github.com/yourusername/housing-prices-kaggle.git
-    cd housing-prices-kaggle
+    git clone https://github.com/alejimgon/Housing-Prices-Kaggle-Competition-Model.git
+    cd Housing-Prices-Kaggle-Competition_Model
     ```
 
 2. **Set up the conda environment**:
