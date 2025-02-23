@@ -1,6 +1,11 @@
-# This script tries to solve the Kaggle Housing Prices competition using regression models
+# This script tries to solve the Kaggle Housing Prices competition using regression models and neural networks
+# The models used are RandomForestRegressor, CatBoostRegressor, XGBRegressor and a simple ANN model
+# We use Grid Search to find the best hyperparameters for the RandomForestRegressor, CatBoostRegressor and XGBRegressor
+# The models are trained using the training data and the best model is selected based on the lowest mean squared error
+# The best model is then used to predict the prices of the houses in the test data
 # The dataset can be found at: https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data
-# The model is trained using the training data in order to predict the process of the houses in the test data
+
+# TODO: Add a dimensionality reduction step before training the models (kernel PCA maybe?)
 
 import pandas as pd
 import numpy as np
@@ -12,6 +17,7 @@ from sklearn.ensemble import RandomForestRegressor
 from catboost import CatBoostRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+import tensorflow as tf
 
 # Setting the path to the data folder
 main_repo_folder = '/'.join(__file__.split('/')[:-1])
@@ -125,37 +131,79 @@ xgboost_best_parameters = xgboost_grid_search.best_params_
 print("XGBoost Best Score: {:.2f}".format(xgboost_best_score))
 print("XGBoost Best Parameters:", xgboost_best_parameters)
 
+# Train the ANN model
+print("Training ANN model")
+ann_regressor = tf.keras.models.Sequential()
+ann_regressor.add(tf.keras.layers.Input(shape=(X_train.shape[1],)))
+ann_regressor.add(tf.keras.layers.Dense(units=128, activation='relu'))
+ann_regressor.add(tf.keras.layers.Dense(units=64, activation='relu'))
+ann_regressor.add(tf.keras.layers.Dense(units=1))
+ann_regressor.compile(optimizer='adam', loss='mean_squared_error', metrics=['mean_squared_error'])
+ann_regressor.fit(X_train, y_train, epochs=200, batch_size=32, validation_data=(X_val, y_val))
+
+# Evaluate the ANN model
+y_pred_ann_regressor = ann_regressor.predict(X_val)
+mse_ann_regressor = mean_squared_error(y_val, y_pred_ann_regressor)
+r2_ann_regressor = r2_score(y_val, y_pred_ann_regressor)
+print(f"ANN Mean Squared Error: {mse_ann_regressor}")
+print(f"ANN R-squared: {r2_ann_regressor}")
+
 # Compare and select the best model
 best_regressor = None
 best_parameters = None
-best_score = float('-inf')
-if rf_best_score > best_score:
+best_score = float('inf')  # Initialize best_score to positive infinity
+
+if mse_ann_regressor < best_score:
+    best_regressor = ann_regressor
+    best_parameters = None
+    best_score = mse_ann_regressor
+    print("Best Model found: ANN")
+    print(f"Best score:", best_score)
+
+if abs(rf_best_score) < best_score:
     best_regressor = rf_grid_search.best_estimator_
     best_parameters = rf_best_parameters
-    best_score = rf_best_score
-if catboost_best_score > best_score:
+    best_score = abs(rf_best_score)
+    print("Best Model found: RandomForestRegressor")
+    print(f"Best score:", best_score)
+
+if abs(catboost_best_score) < best_score:
     best_regressor = catboost_grid_search.best_estimator_
     best_parameters = catboost_best_parameters
-    best_score = catboost_best_score
-if xgboost_best_score > best_score:
+    best_score = abs(catboost_best_score)
+    print("Best Model found: CatBoostRegressor")
+    print(f"Best score:", best_score)
+
+if abs(xgboost_best_score) < best_score:
     best_regressor = xgboost_grid_search.best_estimator_
     best_parameters = xgboost_best_parameters
-    best_score = xgboost_best_score
+    best_score = abs(xgboost_best_score)
+    print("Best Model found: XGBRegressor")
+    print(f"Best score:", best_score)
 
-# Train the best model with the best parameters
-best_regressor.fit(X_train, y_train)
+print("Best Model:", type(best_regressor).__name__)
+print("Best Parameters:", best_parameters)
 
-# Evaluate the model
-y_pred = best_regressor.predict(X_val)
-mse = mean_squared_error(y_val, y_pred)
-r2 = r2_score(y_val, y_pred)
-print(f"Mean Squared Error: {mse}")
-print(f"R-squared: {r2}")
+# Train the best model with the best parameters (if not ANN)
+if best_regressor != ann_regressor:
+    best_regressor.fit(X_train, y_train)
 
-# Predicting the Test set results with the best model
-y_test_pred = best_regressor.predict(X_test)
+# Evaluate the best model
+if best_regressor == ann_regressor:
+    y_pred = y_pred_ann_regressor
+else:
+    y_pred = best_regressor.predict(X_val)
+    mse = mean_squared_error(y_val, y_pred)
+    r2 = r2_score(y_val, y_pred)
+    print(f"Mean Squared Error: {mse}")
+    print(f"R-squared: {r2}")
+
+if best_regressor == ann_regressor:
+    y_test_pred = ann_regressor.predict(X_test)
+else:
+    y_test_pred = best_regressor.predict(X_test)
 
 # Save the predictions to a CSV file
-output = pd.DataFrame({'Id': test_dataset.index, 'SalePrice': y_test_pred})
+output = pd.DataFrame({'Id': test_dataset.index, 'SalePrice': y_test_pred.flatten()})
 output.to_csv(f'{data_folder}/output/submission.csv', index=False)
 print("Predictions saved to submission.csv")
