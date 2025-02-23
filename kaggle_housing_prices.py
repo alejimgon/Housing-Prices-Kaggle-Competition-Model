@@ -23,15 +23,13 @@ import tensorflow as tf
 main_repo_folder = '/'.join(__file__.split('/')[:-1])
 data_folder = f'{main_repo_folder}/data'
 
-# Load the dataset and drop the Id column
+# Load the dataset
 train_dataset = pd.read_csv(f'{data_folder}/train.csv')
 test_dataset = pd.read_csv(f'{data_folder}/test.csv')
-train_dataset = train_dataset.drop(columns=['Id'])
-test_dataset = test_dataset.drop(columns=['Id'])
 
 # Create X and y variables
-X = train_dataset.drop(columns=['SalePrice'])
-y = train_dataset['SalePrice']
+X = train_dataset.iloc[:, 1:-1]  # Select all columns except the first (Id) and the last (SalePrice)
+y = train_dataset.iloc[:, -1]    # Select the last column (SalePrice)
 
 # Identify columns with missing values
 columns_with_mean_imputation = ['LotFrontage', 'MasVnrArea']
@@ -48,7 +46,7 @@ X[columns_with_zero_imputation] = zero_imputer.fit_transform(X[columns_with_zero
 test_dataset[columns_with_zero_imputation] = zero_imputer.transform(test_dataset[columns_with_zero_imputation])
 
 # Identify categorical columns
-categorical_columns = X.select_dtypes(include=['object']).columns
+categorical_columns = train_dataset.select_dtypes(include=['object']).columns
 
 # Apply one-hot encoding to categorical columns
 one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
@@ -73,10 +71,6 @@ X_test = sc.transform(X_test)
 
 # Split the dataset into the Training set and Test set
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=0)
-
-# Train the model
-regressor = RandomForestRegressor(n_estimators=100, random_state=0)
-regressor.fit(X_train, y_train)
 
 # Parameters for Grid Search
 rf_parameters = {
@@ -158,31 +152,31 @@ if mse_ann_regressor < best_score:
     best_parameters = None
     best_score = mse_ann_regressor
     print("Best Model found: ANN")
-    print(f"Best score:", best_score)
+    print(f"Best score: {best_score}")
 
 if abs(rf_best_score) < best_score:
     best_regressor = rf_grid_search.best_estimator_
     best_parameters = rf_best_parameters
     best_score = abs(rf_best_score)
     print("Best Model found: RandomForestRegressor")
-    print(f"Best score:", best_score)
+    print(f"Best score: {best_score}")
 
 if abs(catboost_best_score) < best_score:
     best_regressor = catboost_grid_search.best_estimator_
     best_parameters = catboost_best_parameters
     best_score = abs(catboost_best_score)
     print("Best Model found: CatBoostRegressor")
-    print(f"Best score:", best_score)
+    print(f"Best score: {best_score}")
 
 if abs(xgboost_best_score) < best_score:
     best_regressor = xgboost_grid_search.best_estimator_
     best_parameters = xgboost_best_parameters
     best_score = abs(xgboost_best_score)
     print("Best Model found: XGBRegressor")
-    print(f"Best score:", best_score)
+    print(f"Best score: {best_score}")
 
-print("Best Model:", type(best_regressor).__name__)
-print("Best Parameters:", best_parameters)
+print(f"Best Model: {type(best_regressor).__name__}")
+print(f"Best Parameters: {best_parameters}")
 
 # Train the best model with the best parameters (if not ANN)
 if best_regressor != ann_regressor:
@@ -198,12 +192,13 @@ else:
     print(f"Mean Squared Error: {mse}")
     print(f"R-squared: {r2}")
 
+# Predicting the Test set results with the best model
 if best_regressor == ann_regressor:
     y_test_pred = ann_regressor.predict(X_test)
 else:
     y_test_pred = best_regressor.predict(X_test)
 
 # Save the predictions to a CSV file
-output = pd.DataFrame({'Id': test_dataset.index, 'SalePrice': y_test_pred.flatten()})
+output = pd.DataFrame({'Id': test_dataset['Id'], 'SalePrice': y_test_pred.flatten()})
 output.to_csv(f'{data_folder}/output/submission.csv', index=False)
 print("Predictions saved to submission.csv")
