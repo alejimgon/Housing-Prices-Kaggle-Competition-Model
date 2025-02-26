@@ -1,17 +1,17 @@
 # This script tries to solve the Kaggle Housing Prices competition using regression models and neural networks
+# The script reduces the dimensionality of the dataset using Kernel PCA
 # The models used are RandomForestRegressor, CatBoostRegressor, XGBRegressor and a simple ANN model
 # We use Grid Search to find the best hyperparameters for the RandomForestRegressor, CatBoostRegressor and XGBRegressor
 # The models are trained using the training data and the best model is selected based on the lowest mean squared error
 # The best model is then used to predict the prices of the houses in the test data
 # The dataset can be found at: https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data
 
-# TODO: Add a dimensionality reduction step before training the models (kernel PCA maybe?)
-
 import pandas as pd
 import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.decomposition import KernelPCA
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from catboost import CatBoostRegressor
@@ -33,7 +33,8 @@ y = train_dataset.iloc[:, -1]    # Select the last column (SalePrice)
 
 # Identify columns with missing values
 columns_with_mean_imputation = ['LotFrontage', 'MasVnrArea']
-columns_with_zero_imputation = ['GarageYrBlt']
+columns_with_zero_imputation = ['GarageYrBlt', 'BsmtFinSF1', 'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', 'BsmtFullBath', 'BsmtHalfBath', 'GarageCars', 'GarageArea']
+columns_with_none_imputation = ['MSZoning', 'Alley', 'Utilities', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2', 'Electrical', 'KitchenQual', 'Functional', 'FireplaceQu', 'GarageType', 'GarageFinish', 'GarageQual', 'GarageCond', 'PoolQC', 'Fence', 'MiscFeature', 'SaleType']
 
 # Handling missing values with mean imputation
 mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
@@ -44,6 +45,11 @@ test_dataset[columns_with_mean_imputation] = mean_imputer.transform(test_dataset
 zero_imputer = SimpleImputer(missing_values=np.nan, strategy='constant', fill_value=0)
 X[columns_with_zero_imputation] = zero_imputer.fit_transform(X[columns_with_zero_imputation])
 test_dataset[columns_with_zero_imputation] = zero_imputer.transform(test_dataset[columns_with_zero_imputation])
+
+# Handling missing values with 'None' imputation
+none_imputer = SimpleImputer(missing_values=np.nan, strategy='constant', fill_value='None')
+X[columns_with_none_imputation] = none_imputer.fit_transform(X[columns_with_none_imputation])
+test_dataset[columns_with_none_imputation] = none_imputer.transform(test_dataset[columns_with_none_imputation])
 
 # Identify categorical columns
 categorical_columns = train_dataset.select_dtypes(include=['object']).columns
@@ -71,6 +77,13 @@ X_test = sc.transform(X_test)
 
 # Split the dataset into the Training set and Test set
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Applying Kernel PCA
+print("Applying Kernel PCA")
+kpca = KernelPCA(n_components=10, kernel='rbf')  # Adjust the number of components as needed and try different kernels
+X_train = kpca.fit_transform(X_train)
+X_val = kpca.transform(X_val)
+X_test = kpca.transform(X_test)
 
 # Parameters for Grid Search
 rf_parameters = {
