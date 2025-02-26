@@ -14,7 +14,7 @@
 - [License](#license)
 
 ## Description
-This repository contains my current model for the Housing Prices Kaggle competition. It uses GridSearchCV to find the best parameters between `RandomForestRegressor`, `CatBoostRegressor`, and `XGBRegressor`. Additionally, an `Artificial Neural Network` (ANN) is trained and compared. The best model is then trained and used to predict the test set. The predictions are saved in a CSV file in the 'output' folder.
+This repository contains my current model for the Housing Prices Kaggle competition. It uses Kernel PCA to reduce the dimensionality of the dataset and GridSearchCV to find the best parameters between `RandomForestRegressor`, `CatBoostRegressor`, and `XGBRegressor`. Additionally, an `Artificial Neural Network` (ANN) is trained and compared. The best model is then trained and used to predict the test set. The predictions are saved in a CSV file in the 'output' folder.
 
 ## Installation
 1. **Clone the repository**:
@@ -67,9 +67,6 @@ python kaggle_housing_prices.py
 
 ## Results
 The script outputs the best Mean Squared Error (MSE) and parameters for all models. It also saves the predictions in a CSV file in the 'output' folder.
-
-## TODO
-In a future update, I will add a dimensionality reduction step before training the models (kernel PCA maybe?)
 
 ## Contributing
 If you would like to contribute to this project, please fork the repository and submit a pull request.
