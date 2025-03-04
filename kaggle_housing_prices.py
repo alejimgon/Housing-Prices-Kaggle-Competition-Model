@@ -2,6 +2,7 @@
 # The script reduces the dimensionality of the dataset using Kernel PCA
 # The models used are RandomForestRegressor, CatBoostRegressor, XGBRegressor and a simple ANN model
 # We use Grid Search to find the best hyperparameters for the RandomForestRegressor, CatBoostRegressor and XGBRegressor
+# We use k-Fold Cross Validation to evaluate the models
 # The models are trained using the training data and the best model is selected based on the lowest mean squared error
 # The best model is then used to predict the prices of the houses in the test data
 # The dataset can be found at: https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data
@@ -12,12 +13,20 @@ from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.decomposition import KernelPCA
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.ensemble import RandomForestRegressor
 from catboost import CatBoostRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 import tensorflow as tf
+
+# Functions
+def perform_k_fold_cv(model, X, y, cv=10):
+    '''Function to perform k-Fold Cross Validation on a model'''
+    scores = cross_val_score(estimator=model, X=X, y=y, scoring='neg_mean_squared_error', cv=cv, n_jobs=-1)
+    mean_score = scores.mean()
+    std_dev = scores.std()
+    return mean_score, std_dev
 
 # Setting the path to the data folder
 main_repo_folder = '/'.join(__file__.split('/')[:-1])
@@ -33,8 +42,12 @@ y = train_dataset.iloc[:, -1]    # Select the last column (SalePrice)
 
 # Identify columns with missing values
 columns_with_mean_imputation = ['LotFrontage', 'MasVnrArea']
-columns_with_zero_imputation = ['GarageYrBlt', 'BsmtFinSF1', 'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', 'BsmtFullBath', 'BsmtHalfBath', 'GarageCars', 'GarageArea']
-columns_with_none_imputation = ['MSZoning', 'Alley', 'Utilities', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2', 'Electrical', 'KitchenQual', 'Functional', 'FireplaceQu', 'GarageType', 'GarageFinish', 'GarageQual', 'GarageCond', 'PoolQC', 'Fence', 'MiscFeature', 'SaleType']
+columns_with_zero_imputation = ['GarageYrBlt', 'BsmtFinSF1', 'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', 'BsmtFullBath', 
+                                'BsmtHalfBath', 'GarageCars', 'GarageArea']
+columns_with_none_imputation = ['MSZoning', 'Alley', 'Utilities', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 
+                                'BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2', 'Electrical', 
+                                'KitchenQual', 'Functional', 'FireplaceQu', 'GarageType', 'GarageFinish', 'GarageQual', 
+                                'GarageCond', 'PoolQC', 'Fence', 'MiscFeature', 'SaleType']
 
 # Handling missing values with mean imputation
 mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
@@ -78,12 +91,15 @@ X_test = sc.transform(X_test)
 # Split the dataset into the Training set and Test set
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=0)
 
-# Applying Kernel PCA
-print("Applying Kernel PCA")
-kpca = KernelPCA(n_components=10, kernel='rbf')  # Adjust the number of components as needed and try different kernels
-X_train = kpca.fit_transform(X_train)
-X_val = kpca.transform(X_val)
-X_test = kpca.transform(X_test)
+# Apply Kernel PCA (optional)
+apply_kernel_pca = True  # Set to False to disable Kernel PCA
+
+if apply_kernel_pca:
+    print("Applying Kernel PCA")
+    kpca = KernelPCA(n_components=20, kernel='rbf')  # Adjust the number of components and kernel as needed
+    X_train = kpca.fit_transform(X_train)
+    X_val = kpca.transform(X_val)
+    X_test = kpca.transform(X_test)
 
 # Parameters for Grid Search
 rf_parameters = {
@@ -108,35 +124,41 @@ xgboost_parameters = {
     'reg_lambda': [0, 0.5, 1]
 }
 
-# Grid Search for RandomForestRegressor
-print("Starting Grid Search for RandomForestRegressor")
+# Grid Search for RandomForestRegressor with k-Fold Cross Validation
+print("Starting Grid Search for RandomForestRegressor with k-Fold Cross Validation")
 rf_regressor = RandomForestRegressor(random_state=0)
 rf_grid_search = GridSearchCV(estimator=rf_regressor, param_grid=rf_parameters, scoring='neg_mean_squared_error', cv=10, n_jobs=-1)
 rf_grid_search.fit(X_train, y_train)
 rf_best_score = rf_grid_search.best_score_
 rf_best_parameters = rf_grid_search.best_params_
+rf_mean_score, rf_std_dev = perform_k_fold_cv(rf_grid_search.best_estimator_, X_train, y_train)
 print("RandomForest Best Score: {:.2f}".format(rf_best_score))
 print("RandomForest Best Parameters:", rf_best_parameters)
+print("RandomForest k-Fold CV Mean Score: {:.2f}, Std Dev: {:.2f}".format(rf_mean_score, rf_std_dev))
 
-# Grid Search for CatBoostRegressor
-print("Starting Grid Search for CatBoostRegressor")
+# Grid Search for CatBoostRegressor with k-Fold Cross Validation
+print("Starting Grid Search for CatBoostRegressor with k-Fold Cross Validation")
 catboost_regressor = CatBoostRegressor(random_state=0, verbose=0)
 catboost_grid_search = GridSearchCV(estimator=catboost_regressor, param_grid=catboost_parameters, scoring='neg_mean_squared_error', cv=10, n_jobs=-1)
 catboost_grid_search.fit(X_train, y_train)
 catboost_best_score = catboost_grid_search.best_score_
 catboost_best_parameters = catboost_grid_search.best_params_
+catboost_mean_score, catboost_std_dev = perform_k_fold_cv(catboost_grid_search.best_estimator_, X_train, y_train)
 print("CatBoost Best Score: {:.2f}".format(catboost_best_score))
 print("CatBoost Best Parameters:", catboost_best_parameters)
+print("CatBoost k-Fold CV Mean Score: {:.2f}, Std Dev: {:.2f}".format(catboost_mean_score, catboost_std_dev))
 
-# Grid Search for XGBRegressor
-print("Starting Grid Search for XGBRegressor")
+# Grid Search for XGBRegressor with k-Fold Cross Validation
+print("Starting Grid Search for XGBRegressor with k-Fold Cross Validation")
 xgboost_regressor = XGBRegressor(random_state=0)
 xgboost_grid_search = GridSearchCV(estimator=xgboost_regressor, param_grid=xgboost_parameters, scoring='neg_mean_squared_error', cv=10, n_jobs=-1)
 xgboost_grid_search.fit(X_train, y_train)
 xgboost_best_score = xgboost_grid_search.best_score_
 xgboost_best_parameters = xgboost_grid_search.best_params_
+xgboost_mean_score, xgboost_std_dev = perform_k_fold_cv(xgboost_grid_search.best_estimator_, X_train, y_train)
 print("XGBoost Best Score: {:.2f}".format(xgboost_best_score))
 print("XGBoost Best Parameters:", xgboost_best_parameters)
+print("XGBoost k-Fold CV Mean Score: {:.2f}, Std Dev: {:.2f}".format(xgboost_mean_score, xgboost_std_dev))
 
 # Train the ANN model
 print("Training ANN model")
