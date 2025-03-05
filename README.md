@@ -14,7 +14,7 @@
 - [License](#license)
 
 ## Description
-This repository contains my current model for the Housing Prices Kaggle competition. It uses Kernel PCA to reduce the dimensionality of the dataset and GridSearchCV to find the best parameters between `RandomForestRegressor`, `CatBoostRegressor`, and `XGBRegressor`. Additionally, an `Artificial Neural Network` (ANN) is trained and compared. The best model is then trained and used to predict the test set. The predictions are saved in a CSV file in the 'output' folder.
+This repository contains my current model for the Housing Prices Kaggle competition. It uses Recursive Feature Elimination to reduce the dimensionality of the dataset (optional) and Grid Search to find the best parameters between `RandomForestRegressor`, `CatBoostRegressor`, and `XGBRegressor`. Additionally, an `Artificial Neural Network` (ANN) is trained and compared. The best model is then trained and used to predict the test set. The predictions are saved in a CSV file in the 'output' folder.
 
 ## Installation
 1. **Clone the repository**:
@@ -53,11 +53,13 @@ The dataset used in this competition is provided by Kaggle and contains informat
 The script performs the following steps:
 1. **Data Preprocessing**: Handles missing values and encodes categorical variables.
 2. **Feature Scaling**: Scales the features using `StandardScaler`.
-3. **Grid Search**: Uses `GridSearchCV` to find the best parameters for `RandomForestRegressor`, `CatBoostRegressor`, and `XGBRegressor`.
-4. **ANN Training**: Trains an `Artificial Neural Network` (ANN) and evaluates its performance.
-5. **Model Selection**: Compares the best scores and selects the best model.
-6. **Model Training**: Trains the selected model with the best parameters.
-7. **Prediction**: Uses the trained model to predict the test set.
+3. **Recursive Feature Elimination**: If activated, it will select the top n (selected by the user) features.
+4. **Grid Search**: Uses `GridSearchCV` to find the best parameters for `RandomForestRegressor`, `CatBoostRegressor`, and `XGBRegressor`.
+5. **k-Fold Cross Validation**: Uses `cross_val_score` to to evaluate `RandomForestRegressor`, `CatBoostRegressor`, and `XGBRegressor` performant.
+6. **ANN Training**: Trains an `Artificial Neural Network` (ANN) and evaluates its performance.
+7. **Model Selection**: Compares the best scores and selects the best model.
+8. **Model Training**: Trains the selected model with the best parameters.
+9. **Prediction**: Uses the trained model to predict the test set.
 
 ## Usage
 To run the script, use the following command:
