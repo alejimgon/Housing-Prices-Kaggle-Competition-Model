@@ -1,5 +1,5 @@
 # This script tries to solve the Kaggle Housing Prices competition using regression models and neural networks
-# The script reduces the dimensionality of the dataset using Kernel PCA
+# The script have an option to run Recursive Feature Elimination (RFE) to select the top n (selected by the user) features
 # The models used are RandomForestRegressor, CatBoostRegressor, XGBRegressor and a simple ANN model
 # We use Grid Search to find the best hyperparameters for the RandomForestRegressor, CatBoostRegressor and XGBRegressor
 # We use k-Fold Cross Validation to evaluate the models
@@ -12,12 +12,12 @@ import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.decomposition import KernelPCA
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from sklearn.ensemble import RandomForestRegressor
 from catboost import CatBoostRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.feature_selection import RFE
 import tensorflow as tf
 
 # Functions
@@ -91,15 +91,20 @@ X_test = sc.transform(X_test)
 # Split the dataset into the Training set and Test set
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=0)
 
-# Apply Kernel PCA (optional)
-apply_kernel_pca = True  # Set to False to disable Kernel PCA
+# Apply Recursive Feature Elimination (RFE)
+apply_rfe = False  # Set to False to disable RFE
 
-if apply_kernel_pca:
-    print("Applying Kernel PCA")
-    kpca = KernelPCA(n_components=20, kernel='rbf')  # Adjust the number of components and kernel as needed
-    X_train = kpca.fit_transform(X_train)
-    X_val = kpca.transform(X_val)
-    X_test = kpca.transform(X_test)
+if apply_rfe:
+    print("Applying Recursive Feature Elimination (RFE)")
+    model = RandomForestRegressor()
+    rfe = RFE(estimator=model, n_features_to_select=70)  # n_features_to_select is the number of features to select
+    rfe.fit(X_train, y_train)
+
+    # Get selected features
+    selected_features = rfe.support_
+    X_train = X_train[:, selected_features]
+    X_val = X_val[:, selected_features]
+    X_test = X_test[:, selected_features]
 
 # Parameters for Grid Search
 rf_parameters = {
