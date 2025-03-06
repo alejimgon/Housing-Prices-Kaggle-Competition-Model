@@ -1,5 +1,5 @@
 # This script tries to solve the Kaggle Housing Prices competition using regression models and neural networks
-# The script have an option to run Recursive Feature Elimination (RFE) to select the top n (selected by the user) features
+# The script have an option to run feature reduction based on Recursive Feature Elimination (RFE), Principal Component Analysis (PCA) and Autoencoder
 # The models used are RandomForestRegressor, CatBoostRegressor, XGBRegressor and a simple ANN model
 # We use Grid Search to find the best hyperparameters for the RandomForestRegressor, CatBoostRegressor and XGBRegressor
 # We use k-Fold Cross Validation to evaluate the models
@@ -13,12 +13,16 @@ from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestRegressor
 from catboost import CatBoostRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.feature_selection import RFE
 import tensorflow as tf
+from tensorflow.keras.models import Model # type: ignore
+from tensorflow.keras.layers import Input, Dense # type: ignore
+from tensorflow.keras.callbacks import EarlyStopping # type: ignore
 
 # Functions
 def perform_k_fold_cv(model, X, y, cv=10):
@@ -88,16 +92,32 @@ sc = StandardScaler()
 X = sc.fit_transform(X)
 X_test = sc.transform(X_test)
 
+ncol = X.shape[1]
+
 # Split the dataset into the Training set and Test set
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Apply PCA
+apply_pca = True  # Set to False to disable PCA
+
+if apply_pca:
+    n_components = 0.95  # Set the number of principal components to keep (% of variance to keep)
+
+    print(f"Applying PCA with nº components: {n_components}")
+    pca = PCA(n_components=n_components)  # n_components is the number of principal components to keep (% of variance to keep, [0, 1])
+    X_train = pca.fit_transform(X_train)
+    X_val = pca.transform(X_val)
+    X_test = pca.transform(X_test)
 
 # Apply Recursive Feature Elimination (RFE)
 apply_rfe = False  # Set to False to disable RFE
 
 if apply_rfe:
-    print("Applying Recursive Feature Elimination (RFE)")
+    n_features = 70  # Set the number of features to select
+
+    print(f"Applying Recursive Feature Elimination (RFE) with selected nº of features: {n_features}")
     model = RandomForestRegressor()
-    rfe = RFE(estimator=model, n_features_to_select=70)  # n_features_to_select is the number of features to select
+    rfe = RFE(estimator=model, n_features_to_select=n_features)  # n_features_to_select is the number of features to select
     rfe.fit(X_train, y_train)
 
     # Get selected features
@@ -105,6 +125,80 @@ if apply_rfe:
     X_train = X_train[:, selected_features]
     X_val = X_val[:, selected_features]
     X_test = X_test[:, selected_features]
+
+# Apply Autoencoder for dimensionality reduction
+apply_autoencoder = False  # Set to False to disable Autoencoder
+
+if apply_autoencoder:
+    encoding_dim = 60  # Set the encoding dimension (Options: 10, 20, 30, 40, 50, 60)
+
+    print(f"Applying Autoencoder with encoding dimension: {encoding_dim}")
+    input_dim = ncol  # Number of input features
+
+    # Define the autoencoder model
+    input_layer = Input(shape=(input_dim,))
+        
+    if encoding_dim == 10:
+        encoded1 = Dense(60, activation='relu')(input_layer)
+        encoded2 = Dense(30, activation='relu')(encoded1)
+        encoded3 = Dense(encoding_dim, activation='relu')(encoded2)
+        decoded1 = Dense(30, activation='relu')(encoded3)
+        decoded2 = Dense(60, activation='relu')(decoded1)
+        decoded3 = Dense(input_dim, activation='sigmoid')(decoded2)
+    elif encoding_dim == 20:
+        encoded1 = Dense(60, activation='relu')(input_layer)
+        encoded2 = Dense(40, activation='relu')(encoded1)
+        encoded3 = Dense(encoding_dim, activation='relu')(encoded2)
+        decoded1 = Dense(40, activation='relu')(encoded3)
+        decoded2 = Dense(60, activation='relu')(decoded1)
+        decoded3 = Dense(input_dim, activation='sigmoid')(decoded2)
+    elif encoding_dim == 30:
+        encoded1 = Dense(60, activation='relu')(input_layer)
+        encoded2 = Dense(45, activation='relu')(encoded1)
+        encoded3 = Dense(encoding_dim, activation='relu')(encoded2)
+        decoded1 = Dense(45, activation='relu')(encoded3)
+        decoded2 = Dense(60, activation='relu')(decoded1)
+        decoded3 = Dense(input_dim, activation='sigmoid')(decoded2)
+    elif encoding_dim == 40:
+        encoded1 = Dense(60, activation='relu')(input_layer)
+        encoded2 = Dense(50, activation='relu')(encoded1)
+        encoded3 = Dense(encoding_dim, activation='relu')(encoded2)
+        decoded1 = Dense(50, activation='relu')(encoded3)
+        decoded2 = Dense(60, activation='relu')(decoded1)
+        decoded3 = Dense(input_dim, activation='sigmoid')(decoded2)
+    elif encoding_dim == 50:
+        encoded1 = Dense(60, activation='relu')(input_layer)
+        encoded2 = Dense(55, activation='relu')(encoded1)
+        encoded3 = Dense(encoding_dim, activation='relu')(encoded2)
+        decoded1 = Dense(55, activation='relu')(encoded3)
+        decoded2 = Dense(60, activation='relu')(decoded1)
+        decoded3 = Dense(input_dim, activation='sigmoid')(decoded2)
+    elif encoding_dim == 60:
+        encoded1 = Dense(60, activation='relu')(input_layer)
+        encoded3 = Dense(encoding_dim, activation='relu')(encoded1)
+        decoded1 = Dense(60, activation='relu')(encoded3)
+        decoded3 = Dense(input_dim, activation='sigmoid')(decoded1)
+
+    autoencoder = Model(input_layer, decoded3)
+
+    # Compile the autoencoder
+    autoencoder.compile(optimizer='adam', loss='mean_squared_error')
+
+    # Define early stopping callback
+    early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+
+    # Train the autoencoder
+    autoencoder.fit(X_train, X_train, epochs=200, batch_size=32, shuffle=True, validation_data=(X_val, X_val))
+
+    # Use the encoder part of the autoencoder to transform the data
+    encoder = Model(input_layer, encoded3)
+    X_train = encoder.predict(X_train)
+    X_val = encoder.predict(X_val)
+    X_test = encoder.predict(X_test)
+
+# Stop the script here for testing purposes
+# import sys
+# sys.exit("Stopping script after dimensionality reduction for testing purposes.")
 
 # Parameters for Grid Search
 rf_parameters = {
