@@ -119,7 +119,7 @@ if apply_autoencoder:
     encoding_dim = 60  # Set the encoding dimension (Options: 10, 20, 30, 40, 50, 60)
 
     print(f"Applying Autoencoder with encoding dimension: {encoding_dim}")
-    input_dim = ncol  # Number of input features
+    input_dim = X_test.shape[1]  # Number of input features
 
     # Define the autoencoder model
     input_layer = Input(shape=(input_dim,))
