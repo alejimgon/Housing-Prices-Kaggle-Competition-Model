@@ -2,7 +2,6 @@
 # The script have an option to run feature reduction based on Recursive Feature Elimination (RFE), Principal Component Analysis (PCA) and Autoencoder
 # The models used are RandomForestRegressor, CatBoostRegressor, XGBRegressor and a simple ANN model
 # We use Grid Search to find the best hyperparameters for the RandomForestRegressor, CatBoostRegressor and XGBRegressor
-# We use k-Fold Cross Validation to evaluate the models
 # The models are trained using the training data and the best model is selected based on the lowest mean squared error
 # The best model is then used to predict the prices of the houses in the test data
 # The dataset can be found at: https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data
@@ -12,25 +11,17 @@ import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
-from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from catboost import CatBoostRegressor
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.decomposition import PCA
 from sklearn.feature_selection import RFE
 import tensorflow as tf
 from tensorflow.keras.models import Model # type: ignore
 from tensorflow.keras.layers import Input, Dense # type: ignore
 from tensorflow.keras.callbacks import EarlyStopping # type: ignore
-
-# Functions
-def perform_k_fold_cv(model, X, y, cv=10):
-    '''Function to perform k-Fold Cross Validation on a model'''
-    scores = cross_val_score(estimator=model, X=X, y=y, scoring='neg_mean_squared_error', cv=cv, n_jobs=-1)
-    mean_score = scores.mean()
-    std_dev = scores.std()
-    return mean_score, std_dev
 
 # Setting the path to the data folder
 main_repo_folder = '/'.join(__file__.split('/')[:-1])
@@ -42,6 +33,7 @@ test_dataset = pd.read_csv(f'{data_folder}/test.csv')
 
 # Create X and y variables
 X = train_dataset.iloc[:, 1:-1]  # Select all columns except the first (Id) and the last (SalePrice)
+X_test = test_dataset.iloc[:, 1:] # Select all columns except the first (Id)
 y = train_dataset.iloc[:, -1]    # Select the last column (SalePrice)
 
 # Identify columns with missing values
@@ -56,46 +48,40 @@ columns_with_none_imputation = ['MSZoning', 'Alley', 'Utilities', 'Exterior1st',
 # Handling missing values with mean imputation
 mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
 X[columns_with_mean_imputation] = mean_imputer.fit_transform(X[columns_with_mean_imputation])
-test_dataset[columns_with_mean_imputation] = mean_imputer.transform(test_dataset[columns_with_mean_imputation])
+X_test[columns_with_mean_imputation] = mean_imputer.transform(X_test[columns_with_mean_imputation])
 
 # Handling missing values with zero imputation
 zero_imputer = SimpleImputer(missing_values=np.nan, strategy='constant', fill_value=0)
 X[columns_with_zero_imputation] = zero_imputer.fit_transform(X[columns_with_zero_imputation])
-test_dataset[columns_with_zero_imputation] = zero_imputer.transform(test_dataset[columns_with_zero_imputation])
+X_test[columns_with_zero_imputation] = zero_imputer.transform(X_test[columns_with_zero_imputation])
 
 # Handling missing values with 'None' imputation
 none_imputer = SimpleImputer(missing_values=np.nan, strategy='constant', fill_value='None')
 X[columns_with_none_imputation] = none_imputer.fit_transform(X[columns_with_none_imputation])
-test_dataset[columns_with_none_imputation] = none_imputer.transform(test_dataset[columns_with_none_imputation])
+X_test[columns_with_none_imputation] = none_imputer.transform(X_test[columns_with_none_imputation])
 
 # Identify categorical columns
 categorical_columns = train_dataset.select_dtypes(include=['object']).columns
 
 # Apply one-hot encoding to categorical columns
-one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
-column_transformer = ColumnTransformer(
-    transformers=[
-        ('cat', one_hot_encoder, categorical_columns)
-    ],
-    remainder='passthrough'
-)
+one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False, drop='first')
+column_transformer = ColumnTransformer(transformers=[('encoder', one_hot_encoder, categorical_columns)], remainder='passthrough')
 
 # Fit and transform the training data
 X = column_transformer.fit_transform(X)
 y = y.values
 
 # Transform the test data
-X_test = column_transformer.transform(test_dataset)
-
-# Feature Scaling
-sc = StandardScaler()
-X = sc.fit_transform(X)
-X_test = sc.transform(X_test)
-
-ncol = X.shape[1]
+X_test = column_transformer.transform(X_test)
 
 # Split the dataset into the Training set and Test set
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Feature Scaling
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_val = sc.transform(X_val)
+X_test = sc.transform(X_test)
 
 # Apply PCA
 apply_pca = True  # Set to False to disable PCA
@@ -196,10 +182,6 @@ if apply_autoencoder:
     X_val = encoder.predict(X_val)
     X_test = encoder.predict(X_test)
 
-# Stop the script here for testing purposes
-# import sys
-# sys.exit("Stopping script after dimensionality reduction for testing purposes.")
-
 # Parameters for Grid Search
 rf_parameters = {
     'n_estimators': [50, 100, 200],
@@ -230,10 +212,8 @@ rf_grid_search = GridSearchCV(estimator=rf_regressor, param_grid=rf_parameters, 
 rf_grid_search.fit(X_train, y_train)
 rf_best_score = rf_grid_search.best_score_
 rf_best_parameters = rf_grid_search.best_params_
-rf_mean_score, rf_std_dev = perform_k_fold_cv(rf_grid_search.best_estimator_, X_train, y_train)
 print("RandomForest Best Score: {:.2f}".format(rf_best_score))
 print("RandomForest Best Parameters:", rf_best_parameters)
-print("RandomForest k-Fold CV Mean Score: {:.2f}, Std Dev: {:.2f}".format(rf_mean_score, rf_std_dev))
 
 # Grid Search for CatBoostRegressor with k-Fold Cross Validation
 print("Starting Grid Search for CatBoostRegressor with k-Fold Cross Validation")
@@ -242,10 +222,8 @@ catboost_grid_search = GridSearchCV(estimator=catboost_regressor, param_grid=cat
 catboost_grid_search.fit(X_train, y_train)
 catboost_best_score = catboost_grid_search.best_score_
 catboost_best_parameters = catboost_grid_search.best_params_
-catboost_mean_score, catboost_std_dev = perform_k_fold_cv(catboost_grid_search.best_estimator_, X_train, y_train)
 print("CatBoost Best Score: {:.2f}".format(catboost_best_score))
 print("CatBoost Best Parameters:", catboost_best_parameters)
-print("CatBoost k-Fold CV Mean Score: {:.2f}, Std Dev: {:.2f}".format(catboost_mean_score, catboost_std_dev))
 
 # Grid Search for XGBRegressor with k-Fold Cross Validation
 print("Starting Grid Search for XGBRegressor with k-Fold Cross Validation")
@@ -254,10 +232,8 @@ xgboost_grid_search = GridSearchCV(estimator=xgboost_regressor, param_grid=xgboo
 xgboost_grid_search.fit(X_train, y_train)
 xgboost_best_score = xgboost_grid_search.best_score_
 xgboost_best_parameters = xgboost_grid_search.best_params_
-xgboost_mean_score, xgboost_std_dev = perform_k_fold_cv(xgboost_grid_search.best_estimator_, X_train, y_train)
 print("XGBoost Best Score: {:.2f}".format(xgboost_best_score))
 print("XGBoost Best Parameters:", xgboost_best_parameters)
-print("XGBoost k-Fold CV Mean Score: {:.2f}, Std Dev: {:.2f}".format(xgboost_mean_score, xgboost_std_dev))
 
 # Train the ANN model
 print("Training ANN model")
@@ -311,20 +287,6 @@ if abs(xgboost_best_score) < best_score:
 
 print(f"Best Model: {type(best_regressor).__name__}")
 print(f"Best Parameters: {best_parameters}")
-
-# Train the best model with the best parameters (if not ANN)
-if best_regressor != ann_regressor:
-    best_regressor.fit(X_train, y_train)
-
-# Evaluate the best model
-if best_regressor == ann_regressor:
-    y_pred = y_pred_ann_regressor
-else:
-    y_pred = best_regressor.predict(X_val)
-    mse = mean_squared_error(y_val, y_pred)
-    r2 = r2_score(y_val, y_pred)
-    print(f"Mean Squared Error: {mse}")
-    print(f"R-squared: {r2}")
 
 # Predicting the Test set results with the best model
 if best_regressor == ann_regressor:
