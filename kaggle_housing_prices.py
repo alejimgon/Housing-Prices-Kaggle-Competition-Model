@@ -61,18 +61,28 @@ X[columns_with_none_imputation] = none_imputer.fit_transform(X[columns_with_none
 X_test[columns_with_none_imputation] = none_imputer.transform(X_test[columns_with_none_imputation])
 
 # Identify categorical columns
-categorical_columns = train_dataset.select_dtypes(include=['object']).columns
+categorical_columns = train_dataset.select_dtypes(include=['object']).columns.tolist()
+
+# Add the integer columns that should be treated as categorical
+categorical_columns += ['MSSubClass', 'OverallQual', 'OverallCond']
+
+# Convert these columns to 'object' type in both training and test datasets
+train_dataset[['MSSubClass', 'OverallQual', 'OverallCond']] = train_dataset[['MSSubClass', 'OverallQual', 'OverallCond']].astype('object')
+test_dataset[['MSSubClass', 'OverallQual', 'OverallCond']] = test_dataset[['MSSubClass', 'OverallQual', 'OverallCond']].astype('object')
+
+# Combine training and test datasets for encoding
+combined_data = pd.concat([X, X_test], axis=0)
 
 # Apply one-hot encoding to categorical columns
 one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False, drop='first')
 column_transformer = ColumnTransformer(transformers=[('encoder', one_hot_encoder, categorical_columns)], remainder='passthrough')
 
-# Fit and transform the training data
-X = column_transformer.fit_transform(X)
-y = y.values
+# Fit the encoder on the combined data
+combined_data_encoded = column_transformer.fit_transform(combined_data)
 
-# Transform the test data
-X_test = column_transformer.transform(X_test)
+# Split back into training and test datasets
+X = combined_data_encoded[:len(X), :]
+X_test = combined_data_encoded[len(X):, :]
 
 # Split the dataset into the Training set and Test set
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=0)
