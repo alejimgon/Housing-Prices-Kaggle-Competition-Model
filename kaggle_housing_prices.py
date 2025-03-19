@@ -298,6 +298,20 @@ if abs(xgboost_best_score) < best_score:
 print(f"Best Model: {type(best_regressor).__name__}")
 print(f"Best Parameters: {best_parameters}")
 
+# Evaluate the best model on the validation set
+if best_regressor == ann_regressor:
+    y_val_pred = ann_regressor.predict(X_val)
+else:
+    y_val_pred = best_regressor.predict(X_val)
+
+# Calculate R² score and Mean Squared Error for the best model
+best_model_mse = mean_squared_error(y_val, y_val_pred)
+best_model_r2 = r2_score(y_val, y_val_pred)
+
+# Print the evaluation metrics for the best model
+print(f"Best Model Validation Mean Squared Error: {best_model_mse}")
+print(f"Best Model Validation R-squared: {best_model_r2}")
+
 # Predicting the Test set results with the best model
 if best_regressor == ann_regressor:
     y_test_pred = ann_regressor.predict(X_test)
